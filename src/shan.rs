@@ -1,13 +1,19 @@
 use binrw::{prelude::*, VecArgs};
 use serde::Serialize;
+use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, SeekFrom};
 
-#[derive(Debug, Serialize)]
-pub struct Grid<T: BinRead<Args = ()>>(pub Option<Vec<T>>);
+// Values are stored in row major order?
+// values[z][y][x]?
 
-impl<T: BinRead<Args = ()>> BinRead for Grid<T> {
+// TODO: Provide methods to access the element at a particular x,y,z coordinate?
+// ex: tpcb.get_value1(1,2,0).unwrap()
+#[derive(Debug, SsbhWrite, Serialize)]
+pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
+
+impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
     type Args = (u32, u32, u32);
 
     fn read_options<R: std::io::Read + std::io::Seek>(
@@ -46,7 +52,7 @@ impl<T: BinRead<Args = ()>> BinRead for Grid<T> {
 /// The L0 band has a single coefficient for the constant term.
 /// The L1 band has three coefficients for the linear terms.
 /// Each coefficient is compressed into a single byte using a linear mapping.
-#[derive(Debug, BinRead, BinWrite, Serialize)]
+#[derive(Debug, BinRead, SsbhWrite, Serialize)]
 pub struct CompressedShCoefficients {
     // TODO: Create types instead of u32.
     // TODO: Expose the coefficient conversion as methods?
@@ -56,10 +62,14 @@ pub struct CompressedShCoefficients {
 }
 
 // Spherical harmonics?
-#[derive(Debug, BinRead, Serialize)]
+#[derive(Debug, BinRead, SsbhWrite, Serialize)]
 #[br(magic(b"TPCB"))]
 #[br(import(base_offset: u32))]
+#[ssbhwrite(magic = b"TPCB")]
 pub struct Tpcb {
+    // TODO: derive SsbhWrite but define a new RelPtr<T> type that takes an additional offset?
+    // i.e. RelPtr<Grid1> with offset - 4, RelPtr<Grid2> with offset - 8, etc.
+    // another option is to just handwrite the implementation?
     #[serde(skip)]
     pub offset1: u32,
     #[serde(skip)]
@@ -69,11 +79,13 @@ pub struct Tpcb {
 
     pub unk1_1: u16,
     pub unk1_2: u16,
-    pub grid_dimensions: (u32, u32, u32), // TODO: This can be (0,0,0)?
+    pub grid_width: u32, // TODO: This can be (0,0,0)?
+    pub grid_height: u32,
+    pub grid_depth: u32,
 
     // Setting all values to 0 produces nan for cbuf11 19,20,21
     // Also affects the intensities calculated from values2?
-    pub unks2: [(f32, f32, f32); 4], // angles in degrees?
+    pub unks2: [[f32; 3]; 4], // angles in degrees?
 
     // TODO: Is this bit count and min/max for each component?
     pub unk4: u32, // always 12?
@@ -82,12 +94,7 @@ pub struct Tpcb {
 
     pub grid_cell_count: u32, // product of grid_dimensions?
 
-    // Values are stored in row major order?
-    // values[z][y][x]?
-
-    // TODO: Provide methods to access the element at a particular x,y,z coordinate?
-    // ex: tpcb.get_value1(1,2,0).unwrap()
-
+    // TODO: This needs to account for alignment.
     // TODO: Find a cleaner way of handling pointers.
     /// Grid cell indices in row-major order.
     #[br(args(grid_cell_count, base_offset, offset1))]
@@ -101,12 +108,12 @@ pub struct Tpcb {
     // TODO: Some sort of location information?
     // Only used for stage and not chara lighting?
     #[br(args(grid_cell_count, base_offset, offset3))]
-    pub grid_unk_values: Grid<(f32, f32, f32)>,
+    pub grid_unk_values: Grid<[f32; 3]>,
 }
 
 // TODO: Find a better way to handle args.
 // TODO: 16 byte alignment?
-#[derive(Debug, Serialize)]
+#[derive(Debug, SsbhWrite, Serialize)]
 pub struct TpcbPtr(pub Tpcb);
 
 impl BinRead for TpcbPtr {
@@ -128,7 +135,7 @@ impl BinRead for TpcbPtr {
     }
 }
 
-#[derive(BinRead, BinWrite)]
+#[derive(BinRead, SsbhWrite)]
 pub struct NameStr {
     length: u32,
     #[br(count = length)]
@@ -160,12 +167,14 @@ impl Debug for NameStr {
 }
 
 // Spherical Harmonic ANimation (SHAN)?
-#[derive(Debug, BinRead, Serialize)]
+#[derive(Debug, BinRead, SsbhWrite, Serialize)]
 #[br(magic(b"SHAN"))]
+#[ssbhwrite(magic = b"SHAN")]
 pub struct Shan {
     pub unk1: u32, // some sort of angle
     pub tpcb_count: u32,
     pub unk3: u32, // 0 or 1?
+    // TODO: Add per field attributes to support #[ssbhwrite(align_after = 132)].
     pub name: NameStr,
 
     // The previous space is allocated for the name string.

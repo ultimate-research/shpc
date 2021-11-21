@@ -9,6 +9,8 @@ binrw = "0.8.0"
 serde = { version = "1.0", features=["derive"] }
 serde_json = "1.0"
 glam = "0.19.0"
+ssbh_lib = { path = "../ssbh_lib/ssbh_lib" }
+ssbh_write = { path = "../ssbh_lib/ssbh_write" }
 
 [dev-dependencies]
 approx = "0.5.0"
