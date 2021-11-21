@@ -42,12 +42,17 @@ impl<T: BinRead<Args = ()>> BinRead for Grid<T> {
     }
 }
 
-// RGB use some sort of compressed representation?
+/// Spherical harmonic coefficients for the first two bands.
+/// The L0 band has a single coefficient for the constant term.
+/// The L1 band has three coefficients for the linear terms.
+/// Each coefficient is compressed into a single byte using a linear mapping.
 #[derive(Debug, BinRead, BinWrite, Serialize)]
-pub struct UnkValue {
-    pub r: u32,
-    pub g: u32,
-    pub b: u32,
+pub struct CompressedShCoefficients {
+    // TODO: Create types instead of u32.
+    // TODO: Expose the coefficient conversion as methods?
+    pub r: [u8; 4],
+    pub g: [u8; 4],
+    pub b: [u8; 4],
 }
 
 // Spherical harmonics?
@@ -90,12 +95,13 @@ pub struct Tpcb {
 
     /// Compressed spherical harmonic coefficients in row-major order.
     #[br(args(grid_cell_count, base_offset, offset2))]
-    pub grid_sh_coefficients: Grid<UnkValue>,
+    pub grid_sh_coefficients: Grid<CompressedShCoefficients>,
 
     // This value isn't always present.
     // TODO: Some sort of location information?
+    // Only used for stage and not chara lighting?
     #[br(args(grid_cell_count, base_offset, offset3))]
-    pub grid_values3: Grid<(f32, f32, f32)>,
+    pub grid_unk_values: Grid<(f32, f32, f32)>,
 }
 
 // TODO: Find a better way to handle args.
@@ -163,7 +169,7 @@ pub struct Shan {
     pub name: NameStr,
 
     // The previous space is allocated for the name string.
-    // TODO: Check if this is the starting frame index for the tpcbs starting from index 1
+    // TODO: Check if this is the starting frame index for the tpcbs starting from tpcb index 1
     #[br(seek_before = SeekFrom::Start(132))]
     #[br(count = if tpcb_count > 1 { tpcb_count - 1 } else { 0 })]
     pub unks4: Vec<u32>,
