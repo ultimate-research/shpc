@@ -1,5 +1,6 @@
-use binrw::{PosValue, VecArgs, binread, prelude::*};
+use binread::{derive_binread, prelude::*, PosValue};
 use serde::Serialize;
+use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
 use std::fs::File;
@@ -18,7 +19,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
 
     fn read_options<R: std::io::Read + std::io::Seek>(
         reader: &mut R,
-        options: &binrw::ReadOptions,
+        options: &binread::ReadOptions,
         args: Self::Args,
     ) -> BinResult<Self> {
         // TODO: Named args?
@@ -31,14 +32,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
             let saved_pos = reader.stream_position()?;
 
             reader.seek(SeekFrom::Start(abs_offset))?;
-            let value = <Vec<T>>::read_options(
-                reader,
-                options,
-                VecArgs::<()> {
-                    count: count as usize,
-                    inner: (),
-                },
-            )?;
+            let value = binread::helpers::count(count as usize)(reader, options, ())?;
 
             reader.seek(SeekFrom::Start(saved_pos))?;
             Ok(Self(Some(value)))
@@ -62,21 +56,22 @@ pub struct CompressedShCoefficients {
 }
 
 // Spherical harmonics?
-#[binread]
+#[derive_binread]
 #[derive(Debug, SsbhWrite, Serialize)]
 #[br(magic(b"TPCB"))]
 #[ssbhwrite(magic = b"TPCB")]
+#[ssbhwrite(alignment = 16)]
 pub struct Tpcb {
     #[br(temp)]
     base_offset: PosValue<()>,
 
     // These offsets are relative to the start of the struct.
-    #[serde(skip)]
-    pub offset1: u32,
-    #[serde(skip)]
-    pub offset2: u32,
-    #[serde(skip)]
-    pub offset3: u32,
+    #[br(temp)]
+    offset1: u32,
+    #[br(temp)]
+    offset2: u32,
+    #[br(temp)]
+    offset3: u32,
 
     pub unk1_1: u16,
     pub unk1_2: u16,
@@ -110,66 +105,6 @@ pub struct Tpcb {
     // Only used for stage and not chara lighting?
     #[br(args(grid_cell_count, base_offset.pos - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
-}
-
-// TODO: Find a better way to handle args.
-// TODO: 16 byte alignment?
-#[derive(Debug, Serialize)]
-pub struct TpcbPtr(pub Tpcb);
-
-impl BinRead for TpcbPtr {
-    type Args = ();
-
-    fn read_options<R: std::io::Read + std::io::Seek>(
-        reader: &mut R,
-        options: &binrw::ReadOptions,
-        _args: Self::Args,
-    ) -> BinResult<Self> {
-        let offset = u32::read_options(reader, options, ())?;
-        let pos_after_read = reader.stream_position()?;
-
-        reader.seek(SeekFrom::Start(offset as u64))?;
-        let value = Tpcb::read_options(reader, options, ())?;
-
-        reader.seek(SeekFrom::Start(pos_after_read))?;
-        Ok(Self(value))
-    }
-}
-
-impl SsbhWrite for TpcbPtr {
-    fn ssbh_write<W: std::io::Write + std::io::Seek>(
-        &self,
-        writer: &mut W,
-        data_ptr: &mut u64,
-    ) -> std::io::Result<()> {
-        // The data pointer must point past the containing struct.
-        let current_pos = writer.stream_position()?;
-        if *data_ptr < current_pos + self.size_in_bytes() {
-            *data_ptr = current_pos + self.size_in_bytes();
-        }
-
-        // Calculate the offset.
-        let round_up = |value, n| ((value + n - 1) / n) * n;
-        *data_ptr = round_up(*data_ptr, 16);
-
-        // Write the absolute offset.
-        let offset = *data_ptr as u32;
-        offset.ssbh_write(writer, data_ptr)?;
-
-        // Write the Tpcb data.
-        let pos_after_offset = writer.stream_position()?;
-        writer.seek(SeekFrom::Start(*data_ptr))?;
-
-        self.0.ssbh_write(writer, data_ptr)?;
-
-        writer.seek(SeekFrom::Start(pos_after_offset))?;
-
-        Ok(())
-    }
-
-    fn size_in_bytes(&self) -> u64 {
-        std::mem::size_of::<u32>() as u64
-    }
 }
 
 #[derive(BinRead, SsbhWrite)]
@@ -221,7 +156,7 @@ pub struct Shan {
     pub unks4: Vec<u32>,
 
     #[br(count = tpcb_count)]
-    pub tpcbs: Vec<TpcbPtr>,
+    pub tpcbs: Vec<Ptr32<Tpcb>>,
 }
 
 pub fn read_shan_file(file_name: &str) -> Shan {
