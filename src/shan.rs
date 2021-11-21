@@ -113,7 +113,7 @@ pub struct Tpcb {
 
 // TODO: Find a better way to handle args.
 // TODO: 16 byte alignment?
-#[derive(Debug, SsbhWrite, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct TpcbPtr(pub Tpcb);
 
 impl BinRead for TpcbPtr {
@@ -132,6 +132,42 @@ impl BinRead for TpcbPtr {
 
         reader.seek(SeekFrom::Start(pos_after_read))?;
         Ok(Self(value))
+    }
+}
+
+impl SsbhWrite for TpcbPtr {
+    fn ssbh_write<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        data_ptr: &mut u64,
+    ) -> std::io::Result<()> {
+        // The data pointer must point past the containing struct.
+        let current_pos = writer.stream_position()?;
+        if *data_ptr < current_pos + self.size_in_bytes() {
+            *data_ptr = current_pos + self.size_in_bytes();
+        }
+
+        // Calculate the offset.
+        let round_up = |value, n| ((value + n - 1) / n) * n;
+        *data_ptr = round_up(*data_ptr, 16);
+
+        // Write the absolute offset.
+        let offset = *data_ptr as u32;
+        offset.ssbh_write(writer, data_ptr)?;
+
+        // Write the Tpcb data.
+        let pos_after_offset = writer.stream_position()?;
+        writer.seek(SeekFrom::Start(*data_ptr))?;
+
+        self.0.ssbh_write(writer, data_ptr)?;
+
+        writer.seek(SeekFrom::Start(pos_after_offset))?;
+
+        Ok(())
+    }
+
+    fn size_in_bytes(&self) -> u64 {
+        std::mem::size_of::<u32>() as u64
     }
 }
 
