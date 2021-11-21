@@ -1,4 +1,4 @@
-use binrw::{prelude::*, VecArgs};
+use binrw::{PosValue, VecArgs, binread, prelude::*};
 use serde::Serialize;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
@@ -14,7 +14,7 @@ use std::io::{BufReader, SeekFrom};
 pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
 
 impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
-    type Args = (u32, u32, u32);
+    type Args = (u32, u64, u32);
 
     fn read_options<R: std::io::Read + std::io::Seek>(
         reader: &mut R,
@@ -24,13 +24,13 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
         // TODO: Named args?
         // Calculate the offset from the start of the TPCB.
         let (count, base_offset, offset) = args;
-        let abs_offset = base_offset + offset;
+        let abs_offset = base_offset + offset as u64;
 
         // Null offsets?
         if offset > 0 {
             let saved_pos = reader.stream_position()?;
 
-            reader.seek(SeekFrom::Start(abs_offset as u64))?;
+            reader.seek(SeekFrom::Start(abs_offset))?;
             let value = <Vec<T>>::read_options(
                 reader,
                 options,
@@ -62,14 +62,15 @@ pub struct CompressedShCoefficients {
 }
 
 // Spherical harmonics?
-#[derive(Debug, BinRead, SsbhWrite, Serialize)]
+#[binread]
+#[derive(Debug, SsbhWrite, Serialize)]
 #[br(magic(b"TPCB"))]
-#[br(import(base_offset: u32))]
 #[ssbhwrite(magic = b"TPCB")]
 pub struct Tpcb {
-    // TODO: derive SsbhWrite but define a new RelPtr<T> type that takes an additional offset?
-    // i.e. RelPtr<Grid1> with offset - 4, RelPtr<Grid2> with offset - 8, etc.
-    // another option is to just handwrite the implementation?
+    #[br(temp)]
+    base_offset: PosValue<()>,
+
+    // These offsets are relative to the start of the struct.
     #[serde(skip)]
     pub offset1: u32,
     #[serde(skip)]
@@ -95,19 +96,19 @@ pub struct Tpcb {
     pub grid_cell_count: u32, // product of grid_dimensions?
 
     // TODO: This needs to account for alignment.
-    // TODO: Find a cleaner way of handling pointers.
+    // Subtract the magic size from each offset.
     /// Grid cell indices in row-major order.
-    #[br(args(grid_cell_count, base_offset, offset1))]
+    #[br(args(grid_cell_count, base_offset.pos - 4, offset1))]
     pub grid_indices: Grid<u16>,
 
     /// Compressed spherical harmonic coefficients in row-major order.
-    #[br(args(grid_cell_count, base_offset, offset2))]
+    #[br(args(grid_cell_count, base_offset.pos - 4, offset2))]
     pub grid_sh_coefficients: Grid<CompressedShCoefficients>,
 
-    // This value isn't always present.
+    // TODO: This value isn't always present.
     // TODO: Some sort of location information?
     // Only used for stage and not chara lighting?
-    #[br(args(grid_cell_count, base_offset, offset3))]
+    #[br(args(grid_cell_count, base_offset.pos - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
 }
 
@@ -128,7 +129,7 @@ impl BinRead for TpcbPtr {
         let pos_after_read = reader.stream_position()?;
 
         reader.seek(SeekFrom::Start(offset as u64))?;
-        let value = Tpcb::read_options(reader, options, (offset,))?;
+        let value = Tpcb::read_options(reader, options, ())?;
 
         reader.seek(SeekFrom::Start(pos_after_read))?;
         Ok(Self(value))
