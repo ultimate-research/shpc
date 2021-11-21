@@ -149,11 +149,10 @@ pub struct Shan {
     // TODO: Add per field attributes to support #[ssbhwrite(align_after = 132)].
     pub name: NameStr,
 
-    // The previous space is allocated for the name string.
-    // TODO: Check if this is the starting frame index for the tpcbs starting from tpcb index 1
-    #[br(seek_before = SeekFrom::Start(132))]
-    #[br(count = if tpcb_count > 1 { tpcb_count - 1 } else { 0 })]
-    pub unks4: Vec<u32>,
+    // linear interpolation between tpcbs?
+    #[br(seek_before = SeekFrom::Start(128))]
+    #[br(count = tpcb_count)]
+    pub tpcb_starting_frames: Vec<u32>,
 
     #[br(count = tpcb_count)]
     pub tpcbs: Vec<Ptr32<Tpcb>>,
