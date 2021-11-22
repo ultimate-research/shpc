@@ -1,5 +1,5 @@
 use binread::{derive_binread, prelude::*, PosValue};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
@@ -11,7 +11,7 @@ use std::io::{BufReader, SeekFrom};
 
 // TODO: Provide methods to access the element at a particular x,y,z coordinate?
 // ex: tpcb.get_value1(1,2,0).unwrap()
-#[derive(Debug, SsbhWrite, Serialize)]
+#[derive(Debug, SsbhWrite, Serialize, Deserialize)]
 pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
 
 impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
@@ -46,7 +46,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
 /// The L0 band has a single coefficient for the constant term.
 /// The L1 band has three coefficients for the linear terms.
 /// Each coefficient is compressed into a single byte using a linear mapping.
-#[derive(Debug, BinRead, SsbhWrite, Serialize)]
+#[derive(Debug, BinRead, SsbhWrite, Serialize, Deserialize)]
 pub struct CompressedShCoefficients {
     // TODO: Create types instead of u32.
     // TODO: Expose the coefficient conversion as methods?
@@ -57,7 +57,7 @@ pub struct CompressedShCoefficients {
 
 // Spherical harmonics?
 #[derive_binread]
-#[derive(Debug, SsbhWrite, Serialize)]
+#[derive(Debug, SsbhWrite, Serialize, Deserialize)]
 #[br(magic(b"TPCB"))]
 #[ssbhwrite(magic = b"TPCB")]
 #[ssbhwrite(alignment = 16)]
@@ -107,19 +107,28 @@ pub struct Tpcb {
     pub grid_unk_values: Grid<[f32; 3]>,
 }
 
-#[derive(BinRead, SsbhWrite)]
+// TODO: Use the with attributes for serializing and deserializing similar to SsbhString?
+#[derive(BinRead, SsbhWrite, Serialize, Deserialize, Clone)]
+#[serde(from = "String", into = "String")]
 pub struct NameStr {
     length: u32,
     #[br(count = length)]
     bytes: Vec<u8>,
 }
 
-impl Serialize for NameStr {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_str(&self.to_string_lossy())
+impl From<String> for NameStr {
+    fn from(s: String) -> Self {
+        let bytes: Vec<u8> = s.as_bytes().into();
+        Self {
+            length: bytes.len() as u32,
+            bytes,
+        }
+    }
+}
+
+impl From<NameStr> for String {
+    fn from(n: NameStr) -> Self {
+        n.to_string_lossy()
     }
 }
 
@@ -139,7 +148,7 @@ impl Debug for NameStr {
 }
 
 // Spherical Harmonic ANimation (SHAN)?
-#[derive(Debug, BinRead, SsbhWrite, Serialize)]
+#[derive(Debug, BinRead, SsbhWrite, Serialize, Deserialize)]
 #[br(magic(b"SHAN"))]
 #[ssbhwrite(magic = b"SHAN")]
 pub struct Shan {
