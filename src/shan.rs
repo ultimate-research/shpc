@@ -107,7 +107,6 @@ pub struct Tpcb {
     pub grid_unk_values: Grid<[f32; 3]>,
 }
 
-// TODO: Use the with attributes for serializing and deserializing similar to SsbhString?
 #[derive(BinRead, SsbhWrite, Serialize, Deserialize, Clone)]
 #[serde(from = "String", into = "String")]
 pub struct NameStr {
