@@ -14,3 +14,8 @@ ssbh_write = { path = "../ssbh_lib/ssbh_write" }
 
 [dev-dependencies]
 approx = "0.5.0"
+criterion = "0.3"
+
+[[bench]]
+name = "sh_coefficients"
+harness = false

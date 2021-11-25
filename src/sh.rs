@@ -41,14 +41,15 @@ pub fn compress_coefficients(unk5: f32, unk6: f32, coefficients: [f32; 4]) -> [u
         Vec4::ZERO
     };
 
+    // Rounding makes the conversion more robust to rounding errors and innacurate constants.
     // Reverse the coefficients to match how they appear in the shpcanim file.
     // TODO: Skip the reversing?
-    let [b3, b2, b1, b0] = buffer.to_array();
+    let [b3, b2, b1, b0] = buffer.round().to_array();
     [
-        b0.round() as u8,
-        b1.round() as u8,
-        b2.round() as u8,
-        b3.round() as u8,
+        b0 as u8,
+        b1 as u8,
+        b2 as u8,
+        b3 as u8,
     ]
 }
 
