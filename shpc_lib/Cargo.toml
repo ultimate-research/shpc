@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 binread = "2.1.1"
-serde = { version = "1.0", features=["derive"] }
+serde = { version = "1.0", features=["derive"], optional = true }
 glam = "0.20.1"
 ssbh_lib = { path = "../../ssbh_lib/ssbh_lib" }
 ssbh_write = { path = "../../ssbh_lib/ssbh_write" }

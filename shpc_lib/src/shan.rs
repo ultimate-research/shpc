@@ -1,5 +1,4 @@
 use binread::{derive_binread, prelude::*, PosValue};
-use serde::{Deserialize, Serialize};
 use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
@@ -7,12 +6,16 @@ use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 // Values are stored in row major order?
 // values[z][y][x]?
 
 // TODO: Provide methods to access the element at a particular x,y,z coordinate?
 // ex: tpcb.get_value1(1,2,0).unwrap()
-#[derive(Debug, SsbhWrite, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, SsbhWrite)]
 pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
 
 impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
@@ -47,7 +50,8 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
 /// The L0 band has a single coefficient for the constant term.
 /// The L1 band has three coefficients for the linear terms.
 /// Each coefficient is compressed into a single byte using a linear mapping.
-#[derive(Debug, BinRead, SsbhWrite, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, BinRead, SsbhWrite)]
 pub struct CompressedShCoefficients {
     // TODO: Create types instead of u32.
     // TODO: Expose the coefficient conversion as methods?
@@ -58,10 +62,10 @@ pub struct CompressedShCoefficients {
 
 // Spherical harmonics?
 #[derive_binread]
-#[derive(Debug, SsbhWrite, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, SsbhWrite)]
 #[br(magic(b"TPCB"))]
-#[ssbhwrite(magic = b"TPCB")]
-#[ssbhwrite(alignment = 16)]
+#[ssbhwrite(magic = b"TPCB", alignment = 16)]
 pub struct Tpcb {
     #[br(temp)]
     base_offset: PosValue<()>,
@@ -110,8 +114,9 @@ pub struct Tpcb {
     pub grid_unk_values: Grid<[f32; 3]>,
 }
 
-#[derive(BinRead, SsbhWrite, Serialize, Deserialize, Clone)]
-#[serde(from = "String", into = "String")]
+#[derive(BinRead, SsbhWrite, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "String", into = "String"))]
 pub struct NameStr {
     length: u32,
     #[br(count = length)]
@@ -150,7 +155,8 @@ impl Debug for NameStr {
 }
 
 // Spherical Harmonic ANimation (SHAN)?
-#[derive(Debug, BinRead, SsbhWrite, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, BinRead, SsbhWrite)]
 #[br(magic(b"SHAN"))]
 #[ssbhwrite(magic = b"SHAN")]
 pub struct Shan {
