@@ -4,7 +4,8 @@ use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufReader, SeekFrom};
+use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
+use std::path::Path;
 
 // Values are stored in row major order?
 // values[z][y][x]?
@@ -81,9 +82,9 @@ pub struct Tpcb {
 
     // Setting all values to 0 produces nan for cbuf11 19,20,21
     // Also affects the intensities calculated from values2?
-    pub unk2: [f32; 3], 
-    
-    pub unk3: [[f32; 3]; 3],// angles in degrees?
+    pub unk2: [f32; 3],
+
+    pub unk3: [[f32; 3]; 3], // angles in degrees?
 
     // TODO: Is this bit count and min/max for each component?
     pub unk4: u32, // always 12?
@@ -166,6 +167,39 @@ pub struct Shan {
 
     #[br(count = tpcb_count)]
     pub tpcbs: Vec<Ptr32<Tpcb>>,
+}
+
+impl Shan {
+    /// Tries to read the data from `reader`.
+    /// The entire file is buffered for performance.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = Cursor::new(std::fs::read(path)?);
+        file.read_le().map_err(Into::into)
+    }
+
+    /// Tries to read the data from `reader`.
+    /// For best performance when opening from a file, use [Shan::from_file] instead.
+    pub fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
+        reader.read_le().map_err(Into::into)
+    }
+
+    /// Writes to the given `writer`.
+    /// For best performance when writing to a file, use [Shan::write_to_file] instead.
+    pub fn write<W: std::io::Write + Seek>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        <Self as SsbhWrite>::write(self, writer)
+    }
+
+    /// Writes to the given `path`.
+    /// The entire file is buffered for performance.
+    pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), std::io::Error> {
+        // Buffer the entire write operation into memory to improve performance.
+        // The seeks used to write relative offsets would cause flushes for BufWriter.
+        let mut cursor = Cursor::new(Vec::new());
+        self.write(&mut cursor)?;
+
+        let mut writer = std::fs::File::create(path)?;
+        writer.write_all(cursor.get_mut())
+    }
 }
 
 pub fn read_shan_file(file_name: &str) -> Shan {
