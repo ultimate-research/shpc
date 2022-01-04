@@ -1,4 +1,4 @@
-use glam::Vec4;
+use glam::{const_vec4, Vec4};
 
 // Constants were determined experimentally from the uniform buffer cbuf11 in Yuzu emulator.
 // An example of the buffer output from debugging with RenderDoc.
@@ -7,9 +7,9 @@ use glam::Vec4;
 // cbuf11[21] 0.1481, -0.2962, -0.08551, 0.35544 float4
 
 // TODO: It should be possible for decompress -> compress -> decompress to be 1:1 given the low precision (8-bit).
-const SH_MIN: [f32; 4] = [0.1481, -0.2962, -0.08551, 0.35544];
-const SH_MIN_SCALE: [f32; 4] = [0.32573, 0.32573, 0.32573, 0.28209];
-const SH_MAX_SCALE: [f32; 4] = [83.062235, 83.062225, 83.062225, 71.93414];
+const SH_MIN: Vec4 = const_vec4!([0.1481, -0.2962, -0.08551, 0.35544]);
+const SH_MIN_SCALE: Vec4 = const_vec4!([0.32573, 0.32573, 0.32573, 0.28209]);
+const SH_MAX_SCALE: Vec4 = const_vec4!([83.062235, 83.062225, 83.062225, 71.93414]);
 
 // TODO: Investigate why the coefficients in game can sometimes be nan.
 pub fn decompress_coefficients(unk5: f32, unk6: f32, compressed_coefficients: [u8; 4]) -> [f32; 4] {
@@ -22,19 +22,19 @@ pub fn decompress_coefficients(unk5: f32, unk6: f32, compressed_coefficients: [u
         compressed_coefficients[0] as f32 / 255.0,
     );
 
-    let min_value = Vec4::from(SH_MIN) + Vec4::from(SH_MIN_SCALE) * unk5;
-    let scale = Vec4::from(SH_MAX_SCALE) * unk6;
+    let min_value = SH_MIN + SH_MIN_SCALE * unk5;
+    let scale = SH_MAX_SCALE * unk6;
     (t * scale + min_value).to_array()
 }
 
 pub fn compress_coefficients(unk5: f32, unk6: f32, coefficients: [f32; 4]) -> [u8; 4] {
     let t = Vec4::from(coefficients);
 
-    let min_value = Vec4::from(SH_MIN) + Vec4::from(SH_MIN_SCALE) * unk5;
+    let min_value = SH_MIN + SH_MIN_SCALE * unk5;
 
     // When unk6 is zero, the result doesn't depend on the buffer values.
     // We'll just a buffer of all zeros to avoid division by zero.
-    let scale = Vec4::from(SH_MAX_SCALE) * unk6;
+    let scale = SH_MAX_SCALE * unk6;
     let buffer = if unk6 != 0.0 {
         (t - min_value) / scale * 255.0
     } else {
@@ -45,12 +45,7 @@ pub fn compress_coefficients(unk5: f32, unk6: f32, coefficients: [f32; 4]) -> [u
     // Reverse the coefficients to match how they appear in the shpcanim file.
     // TODO: Skip the reversing?
     let [b3, b2, b1, b0] = buffer.round().to_array();
-    [
-        b0 as u8,
-        b1 as u8,
-        b2 as u8,
-        b3 as u8,
-    ]
+    [b0 as u8, b1 as u8, b2 as u8, b3 as u8]
 }
 
 #[cfg(test)]
