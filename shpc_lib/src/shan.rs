@@ -8,55 +8,58 @@ use std::path::Path;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-// Values are stored in row major order?
-// values[z][y][x]?
-
-// TODO: Provide methods to access the element at a particular x,y,z coordinate?
-// ex: tpcb.get_value1(1,2,0).unwrap()
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, SsbhWrite)]
-pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
-
-impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
-    type Args = (u32, u64, u32);
-
-    fn read_options<R: std::io::Read + std::io::Seek>(
-        reader: &mut R,
-        options: &binread::ReadOptions,
-        args: Self::Args,
-    ) -> BinResult<Self> {
-        // TODO: Named args?
-        // Calculate the offset from the start of the TPCB.
-        let (count, base_offset, offset) = args;
-        let abs_offset = base_offset + offset as u64;
-
-        // Null offsets?
-        if offset > 0 {
-            let saved_pos = reader.stream_position()?;
-
-            reader.seek(SeekFrom::Start(abs_offset))?;
-            let value = binread::helpers::count(count as usize)(reader, options, ())?;
-
-            reader.seek(SeekFrom::Start(saved_pos))?;
-            Ok(Self(Some(value)))
-        } else {
-            Ok(Self(None))
-        }
-    }
-}
-
-/// Spherical harmonic coefficients for the first two bands.
-/// The L0 band has a single coefficient for the constant term.
-/// The L1 band has three coefficients for the linear terms.
-/// Each coefficient is compressed into a single byte using a linear mapping.
+// Spherical Harmonic ANimation (SHAN)?
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, BinRead, SsbhWrite)]
-pub struct CompressedShCoefficients {
-    // TODO: Create types instead of u32.
-    // TODO: Expose the coefficient conversion as methods?
-    pub r: [u8; 4],
-    pub g: [u8; 4],
-    pub b: [u8; 4],
+#[br(magic(b"SHAN"))]
+#[ssbhwrite(magic = b"SHAN")]
+pub struct Shan {
+    pub unk1: u32, // some sort of angle
+    pub tpcb_count: u32,
+    pub unk3: u32, // 0 or 1?
+    #[ssbhwrite(align_after = 128)]
+    pub name: NameStr,
+
+    // linear interpolation between tpcbs?
+    #[br(seek_before = SeekFrom::Start(128))]
+    #[br(count = tpcb_count)]
+    pub tpcb_starting_frames: Vec<u32>,
+
+    #[br(count = tpcb_count)]
+    pub tpcbs: Vec<Ptr32<Tpcb>>,
+}
+
+impl Shan {
+    /// Tries to read the data from `reader`.
+    /// The entire file is buffered for performance.
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = Cursor::new(std::fs::read(path)?);
+        file.read_le().map_err(Into::into)
+    }
+
+    /// Tries to read the data from `reader`.
+    /// For best performance when opening from a file, use [Shan::from_file] instead.
+    pub fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
+        reader.read_le().map_err(Into::into)
+    }
+
+    /// Writes to the given `writer`.
+    /// For best performance when writing to a file, use [Shan::write_to_file] instead.
+    pub fn write<W: std::io::Write + Seek>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+        <Self as SsbhWrite>::write(self, writer)
+    }
+
+    /// Writes to the given `path`.
+    /// The entire file is buffered for performance.
+    pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), std::io::Error> {
+        // Buffer the entire write operation into memory to improve performance.
+        // The seeks used to write relative offsets would cause flushes for BufWriter.
+        let mut cursor = Cursor::new(Vec::new());
+        self.write(&mut cursor)?;
+
+        let mut writer = std::fs::File::create(path)?;
+        writer.write_all(cursor.get_mut())
+    }
 }
 
 // Spherical harmonics?
@@ -118,6 +121,57 @@ pub struct TpcbInner {
     // Only used for stage and not chara lighting?
     #[br(args(grid_cell_count, base_offset - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
+}
+
+// Values are stored in row major order?
+// values[z][y][x]?
+
+// TODO: Provide methods to access the element at a particular x,y,z coordinate?
+// ex: tpcb.get_value1(1,2,0).unwrap()
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, SsbhWrite)]
+pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
+
+impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
+    type Args = (u32, u64, u32);
+
+    fn read_options<R: std::io::Read + std::io::Seek>(
+        reader: &mut R,
+        options: &binread::ReadOptions,
+        args: Self::Args,
+    ) -> BinResult<Self> {
+        // TODO: Named args?
+        // Calculate the offset from the start of the TPCB.
+        let (count, base_offset, offset) = args;
+        let abs_offset = base_offset + offset as u64;
+
+        // Null offsets?
+        if offset > 0 {
+            let saved_pos = reader.stream_position()?;
+
+            reader.seek(SeekFrom::Start(abs_offset))?;
+            let value = binread::helpers::count(count as usize)(reader, options, ())?;
+
+            reader.seek(SeekFrom::Start(saved_pos))?;
+            Ok(Self(Some(value)))
+        } else {
+            Ok(Self(None))
+        }
+    }
+}
+
+/// Spherical harmonic coefficients for the first two bands.
+/// The L0 band has a single coefficient for the constant term.
+/// The L1 band has three coefficients for the linear terms.
+/// Each coefficient is compressed into a single byte using a linear mapping.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, BinRead, SsbhWrite)]
+pub struct CompressedShCoefficients {
+    // TODO: Create types instead of u32.
+    // TODO: Expose the coefficient conversion as methods?
+    pub r: [u8; 4],
+    pub g: [u8; 4],
+    pub b: [u8; 4],
 }
 
 // TODO: Find a way to derive this.
@@ -193,59 +247,5 @@ impl NameStr {
 impl Debug for NameStr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"{}\"", self.to_string_lossy())
-    }
-}
-
-// Spherical Harmonic ANimation (SHAN)?
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, BinRead, SsbhWrite)]
-#[br(magic(b"SHAN"))]
-#[ssbhwrite(magic = b"SHAN")]
-pub struct Shan {
-    pub unk1: u32, // some sort of angle
-    pub tpcb_count: u32,
-    pub unk3: u32, // 0 or 1?
-    #[ssbhwrite(align_after = 128)]
-    pub name: NameStr,
-
-    // linear interpolation between tpcbs?
-    #[br(seek_before = SeekFrom::Start(128))]
-    #[br(count = tpcb_count)]
-    pub tpcb_starting_frames: Vec<u32>,
-
-    #[br(count = tpcb_count)]
-    pub tpcbs: Vec<Ptr32<Tpcb>>,
-}
-
-impl Shan {
-    /// Tries to read the data from `reader`.
-    /// The entire file is buffered for performance.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = Cursor::new(std::fs::read(path)?);
-        file.read_le().map_err(Into::into)
-    }
-
-    /// Tries to read the data from `reader`.
-    /// For best performance when opening from a file, use [Shan::from_file] instead.
-    pub fn read<R: Read + Seek>(reader: &mut R) -> Result<Self, Box<dyn std::error::Error>> {
-        reader.read_le().map_err(Into::into)
-    }
-
-    /// Writes to the given `writer`.
-    /// For best performance when writing to a file, use [Shan::write_to_file] instead.
-    pub fn write<W: std::io::Write + Seek>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        <Self as SsbhWrite>::write(self, writer)
-    }
-
-    /// Writes to the given `path`.
-    /// The entire file is buffered for performance.
-    pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), std::io::Error> {
-        // Buffer the entire write operation into memory to improve performance.
-        // The seeks used to write relative offsets would cause flushes for BufWriter.
-        let mut cursor = Cursor::new(Vec::new());
-        self.write(&mut cursor)?;
-
-        let mut writer = std::fs::File::create(path)?;
-        writer.write_all(cursor.get_mut())
     }
 }
