@@ -2,8 +2,7 @@ use binread::{derive_binread, prelude::*, PosValue};
 use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
-use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 #[cfg(feature = "serde")]
@@ -63,11 +62,9 @@ pub struct CompressedShCoefficients {
 // Spherical harmonics?
 #[derive_binread]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, SsbhWrite)]
+#[derive(Debug)]
 #[br(magic(b"TPCB"))]
-#[ssbhwrite(magic = b"TPCB", alignment = 16)]
 pub struct Tpcb {
-    // TODO: These offsets aren't set properly when using SsbhWrite?
     #[br(temp)]
     base_offset: PosValue<()>,
 
@@ -79,6 +76,16 @@ pub struct Tpcb {
     #[br(temp)]
     offset3: u32,
 
+    #[br(args(base_offset.pos, offset1, offset2, offset3))]
+    #[serde(flatten)]
+    inner: TpcbInner,
+}
+
+// Create an inner type to only have to hand write the pointer logic.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, BinRead, SsbhWrite)]
+#[br(import(base_offset: u64, offset1: u32, offset2: u32, offset3: u32))]
+pub struct TpcbInner {
     pub unk1_1: u16,
     pub unk1_2: u16,
     pub grid_width: u32, // TODO: This can be (0,0,0)?
@@ -99,18 +106,54 @@ pub struct Tpcb {
     // TODO: This needs to account for alignment.
     // Subtract the magic size from each offset.
     /// Grid cell indices in row-major order.
-    #[br(args(grid_cell_count, base_offset.pos - 4, offset1))]
+    #[br(args(grid_cell_count, base_offset - 4, offset1))]
     pub grid_indices: Grid<u16>,
 
     /// Compressed spherical harmonic coefficients in row-major order.
-    #[br(args(grid_cell_count, base_offset.pos - 4, offset2))]
+    #[br(args(grid_cell_count, base_offset - 4, offset2))]
     pub grid_sh_coefficients: Grid<CompressedShCoefficients>,
 
     // TODO: This value isn't always present.
     // TODO: Some sort of location information?
     // Only used for stage and not chara lighting?
-    #[br(args(grid_cell_count, base_offset.pos - 4, offset3))]
+    #[br(args(grid_cell_count, base_offset - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
+}
+
+// TODO: Find a way to derive this.
+impl SsbhWrite for Tpcb {
+    fn ssbh_write<W: std::io::Write + std::io::Seek>(
+        &self,
+        writer: &mut W,
+        data_ptr: &mut u64,
+    ) -> std::io::Result<()> {
+        // Ensure the next pointer won't point inside this struct.
+        let current_pos = writer.stream_position()?;
+        if *data_ptr < current_pos + self.size_in_bytes() {
+            *data_ptr = current_pos + self.size_in_bytes();
+        }
+        // Write all the fields.
+        writer.write_all(b"TPCB")?;
+        // TODO: Is there some kind of alignment for these pointers?
+        let offset1 = 96u32; // "header" size including magic?
+        let offset2 = offset1 + self.inner.grid_cell_count * 2;
+        let offset3 = if self.inner.grid_unk_values.0.is_some() {
+            offset2 + self.inner.grid_cell_count * 12
+        } else {
+            0
+        };
+
+        offset1.ssbh_write(writer, data_ptr)?;
+        offset2.ssbh_write(writer, data_ptr)?;
+        offset3.ssbh_write(writer, data_ptr)?;
+
+        self.inner.ssbh_write(writer, data_ptr)?;
+        Ok(())
+    }
+
+    fn alignment_in_bytes() -> u64 {
+        16
+    }
 }
 
 #[derive(BinRead, SsbhWrite, Clone)]
@@ -205,10 +248,4 @@ impl Shan {
         let mut writer = std::fs::File::create(path)?;
         writer.write_all(cursor.get_mut())
     }
-}
-
-pub fn read_shan_file(file_name: &str) -> Shan {
-    let mut file = BufReader::new(File::open(file_name).unwrap());
-    let data: Shan = file.read_le().unwrap();
-    data
 }
