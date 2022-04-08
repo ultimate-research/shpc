@@ -67,6 +67,7 @@ pub struct CompressedShCoefficients {
 #[br(magic(b"TPCB"))]
 #[ssbhwrite(magic = b"TPCB", alignment = 16)]
 pub struct Tpcb {
+    // TODO: These offsets aren't set properly when using SsbhWrite?
     #[br(temp)]
     base_offset: PosValue<()>,
 
@@ -84,13 +85,11 @@ pub struct Tpcb {
     pub grid_height: u32,
     pub grid_depth: u32,
 
-    // Setting all values to 0 produces nan for cbuf11 19,20,21
-    // Also affects the intensities calculated from values2?
+    // Setting all values to 0 produces nan for cbuf11 19,20,21?
     pub unk2: [f32; 3],
 
     pub unk3: [[f32; 3]; 3], // angles in degrees?
 
-    // TODO: Is this bit count and min/max for each component?
     pub unk4: u32, // always 12?
     pub unk5: f32, // affects the calculated intensities from values2?
     pub unk6: f32, // affects the calculated intensities from values2?
@@ -163,7 +162,7 @@ pub struct Shan {
     pub unk1: u32, // some sort of angle
     pub tpcb_count: u32,
     pub unk3: u32, // 0 or 1?
-    // TODO: Add per field attributes to support #[ssbhwrite(align_after = 132)].
+    #[ssbhwrite(align_after = 128)]
     pub name: NameStr,
 
     // linear interpolation between tpcbs?
