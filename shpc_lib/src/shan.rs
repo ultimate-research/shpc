@@ -80,7 +80,7 @@ pub struct Tpcb {
     offset3: u32,
 
     #[br(args(base_offset.pos, offset1, offset2, offset3))]
-    #[serde(flatten)]
+    #[cfg_attr(feature = "serde", serde(flatten))]
     inner: TpcbInner,
 }
 
