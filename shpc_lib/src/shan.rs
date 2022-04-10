@@ -81,7 +81,7 @@ pub struct Tpcb {
 
     #[br(args(base_offset.pos, offset1, offset2, offset3))]
     #[cfg_attr(feature = "serde", serde(flatten))]
-    inner: TpcbInner,
+    pub inner: TpcbInner,
 }
 
 // Create an inner type to only have to hand write the pointer logic.
