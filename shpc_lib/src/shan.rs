@@ -1,4 +1,4 @@
-use binread::{derive_binread, prelude::*, PosValue};
+use binrw::{binread, prelude::*, PosValue};
 use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
 use std::fmt::Debug;
@@ -63,7 +63,7 @@ impl Shan {
 }
 
 // Spherical harmonics?
-#[derive_binread]
+#[binread]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 #[br(magic(b"TPCB"))]
@@ -137,7 +137,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
 
     fn read_options<R: std::io::Read + std::io::Seek>(
         reader: &mut R,
-        options: &binread::ReadOptions,
+        options: &binrw::ReadOptions,
         args: Self::Args,
     ) -> BinResult<Self> {
         // TODO: Named args?
@@ -150,7 +150,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
             let saved_pos = reader.stream_position()?;
 
             reader.seek(SeekFrom::Start(abs_offset))?;
-            let value = binread::helpers::count(count as usize)(reader, options, ())?;
+            let value = binrw::helpers::count(count as usize)(reader, options, ())?;
 
             reader.seek(SeekFrom::Start(saved_pos))?;
             Ok(Self(Some(value)))

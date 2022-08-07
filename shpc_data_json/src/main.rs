@@ -2,11 +2,12 @@ use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use shpc_lib::shan::Shan;
 
 // TODO: Create a higher level representation that handles coefficient compression.
 fn parse_and_write_json<P: AsRef<Path>>(input: P, output: P) {
     let parse_start_time = Instant::now();
-    match shpc_lib::Shan::from_file(&input) {
+    match Shan::from_file(&input) {
         Ok(data) => {
             eprintln!("Parse: {:?}", parse_start_time.elapsed());
 
@@ -27,7 +28,7 @@ fn deserialize_and_save(
     output: &Option<PathBuf>,
     extension: &str,
 ) -> serde_json::Result<()> {
-    let data = serde_json::from_str::<shpc_lib::Shan>(json)?;
+    let data = serde_json::from_str::<Shan>(json)?;
 
     let output_path = output
         .as_ref()
