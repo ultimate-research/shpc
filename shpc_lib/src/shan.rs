@@ -8,7 +8,9 @@ use std::path::Path;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-// Spherical Harmonic ANimation (SHAN)?
+// TODO: Can this all be done without an ssbh_lib dependency and use binrw?
+// There aren't very many offsets to calculate.
+/// A Spherical Harmonic ANimation (SHAN) file like chara.shpcanim.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, BinRead, SsbhWrite)]
 #[br(magic(b"SHAN"))]
@@ -62,7 +64,6 @@ impl Shan {
     }
 }
 
-// Spherical harmonics?
 #[binread]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
@@ -91,21 +92,16 @@ pub struct Tpcb {
 pub struct TpcbInner {
     pub unk1_1: u16,
     pub unk1_2: u16,
-    pub grid_width: u32, // TODO: This can be (0,0,0)?
-    pub grid_height: u32,
-    pub grid_depth: u32,
-
-    // Setting all values to 0 produces nan for cbuf11 19,20,21?
-    pub unk2: [f32; 3],
-
-    pub unk3: [[f32; 3]; 3], // angles in degrees?
-
-    pub unk4: u32, // always 12?
-    pub unk5: f32, // affects the calculated intensities from values2?
-    pub unk6: f32, // affects the calculated intensities from values2?
-
-    pub grid_cell_count: u32, // product of grid_dimensions?
-
+    pub grid_count_xyz: [u32; 3], // TODO: This can be (0,0,0)?
+    // TODO: Setting spacing values to 0 produces all nan coefficients?
+    pub grid_spacing_xyz: [f32; 3],    // dimensions / (count - 1)
+    pub grid_dimensions_xyz: [f32; 3], // max - min
+    pub grid_range_min: [f32; 3],
+    pub grid_range_max: [f32; 3],
+    pub unk4: u32,            // always 12?
+    pub unk5: f32,            // affects the grid_sh_coefficients?
+    pub unk6: f32,            // affects the grid_sh_coefficients?
+    pub grid_cell_count: u32, // product of grid counts
     // TODO: This needs to account for alignment.
     // Subtract the magic size from each offset.
     /// Grid cell indices in row-major order.

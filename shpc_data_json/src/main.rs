@@ -1,8 +1,8 @@
+use shpc_lib::shan::Shan;
 use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use shpc_lib::shan::Shan;
 
 // TODO: Create a higher level representation that handles coefficient compression.
 fn parse_and_write_json<P: AsRef<Path>>(input: P, output: P) {
