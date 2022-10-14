@@ -1,5 +1,5 @@
 [package]
-name = "shpc_lib"
+name = "shpc"
 version = "0.1.0"
 authors = ["ScanMountGoat <>"]
 edition = "2021"

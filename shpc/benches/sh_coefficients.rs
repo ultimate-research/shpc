@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use shpc_lib::sh::{compress_coefficients, decompress_coefficients};
+use shpc::sh::{compress_coefficients, decompress_coefficients};
 
 pub fn compress_coefficients_benchmark(c: &mut Criterion) {
     c.bench_function("compress_coefficients", |b| {

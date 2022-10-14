@@ -1,8 +1,0 @@
-[package]
-name = "shpc_data_json"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-shpc_lib = { path = "../shpc_lib", features=["serde"] }
-serde_json = "1.0"

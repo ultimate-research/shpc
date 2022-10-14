@@ -1,4 +1,4 @@
-use shpc_lib::shan::Shan;
+use shpc::shan::Shan;
 use std::env;
 use std::io::Write;
 use std::path::{Path, PathBuf};

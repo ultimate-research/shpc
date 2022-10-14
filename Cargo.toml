@@ -1,2 +1,2 @@
 [workspace]
-members = ["shpc_lib", "shpc_data_json"]
+members = ["shpc", "shpc_json"]
