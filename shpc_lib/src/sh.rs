@@ -1,3 +1,4 @@
+//! Functions for compressing and decompressing spherical harmonic coefficients.
 use glam::{const_vec4, Vec4};
 
 // Constants were determined experimentally from the uniform buffer vp_c11 in Ryujinx emulator.

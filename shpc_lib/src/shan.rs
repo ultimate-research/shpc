@@ -1,3 +1,4 @@
+//! The low level API for SHAN files stored in .shpcanim or .shpc files.
 use binrw::{binread, prelude::*, PosValue};
 use ssbh_lib::Ptr32;
 use ssbh_write::SsbhWrite;
@@ -90,33 +91,43 @@ pub struct Tpcb {
 #[derive(Debug, BinRead, SsbhWrite)]
 #[br(import(base_offset: u64, offset1: u32, offset2: u32, offset3: u32))]
 pub struct TpcbInner {
-    pub unk1_1: u16,
-    pub unk1_2: u16,
-    pub grid_cell_count_xyz: [u32; 3], // TODO: This can be (0,0,0)?
-    // TODO: Setting spacing values to 0 produces all nan coefficients?
-    pub grid_spacing_xyz: [f32; 3],    // dimensions / (count - 1)
-    pub grid_dimensions_xyz: [f32; 3], // max - min
-    pub grid_range_min: [f32; 3],
-    pub grid_range_max: [f32; 3],
-    pub unk4: u32,            // always 12?
-    pub unk5: f32,            // affects the grid_sh_coefficients?
-    pub unk6: f32,            // affects the grid_sh_coefficients?
-    pub grid_cell_count: u32, // product of grid counts
+    pub header: TpcbHeader,
+
     // TODO: This needs to account for alignment.
     // Subtract the magic size from each offset.
     /// The range `0..grid_cell_count` not including `grid_cell_count`.
-    #[br(args(grid_cell_count, base_offset - 4, offset1))]
+    #[br(args(header.grid_cell_count, base_offset - 4, offset1))]
     pub grid_indices: Grid<u16>,
 
-    /// Compressed spherical harmonic coefficients in row-major order.
-    #[br(args(grid_cell_count, base_offset - 4, offset2))]
+    /// Compressed spherical harmonic coefficients in row-major order for x -> y -> z.
+    #[br(args(header.grid_cell_count, base_offset - 4, offset2))]
     pub grid_sh_coefficients: Grid<CompressedShCoefficients>,
 
     // TODO: This value isn't always present.
     // TODO: Some sort of location information?
     // Only used for stage and not chara lighting?
-    #[br(args(grid_cell_count, base_offset - 4, offset3))]
+    #[br(args(header.grid_cell_count, base_offset - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, BinRead, SsbhWrite, PartialEq)]
+pub struct TpcbHeader {
+    pub unk1_1: u16,
+    pub unk1_2: u16,
+    pub grid_cell_count_xyz: [u32; 3], // TODO: This can be (0,0,0)?
+    // TODO: Setting spacing values to 0 produces all nan coefficients?
+    /// `grid_dimensions_xyz / (grid_cell_count_xyz - 1)`
+    pub grid_spacing_xyz: [f32; 3],
+    /// `grid_range_max_xyz - grid_range_min_xyz`
+    pub grid_dimensions_xyz: [f32; 3],
+    pub grid_range_min_xyz: [f32; 3],
+    pub grid_range_max_xyz: [f32; 3],
+    pub unk4: u32, // always 12?
+    pub unk5: f32, // affects the grid_sh_coefficients?
+    pub unk6: f32, // affects the grid_sh_coefficients?
+    /// The product of the counts in `grid_cell_count_xyz`
+    pub grid_cell_count: u32,
 }
 
 // Values are stored in row major order?
@@ -186,9 +197,9 @@ impl SsbhWrite for Tpcb {
         writer.write_all(b"TPCB")?;
         // TODO: Is there some kind of alignment for these pointers?
         let offset1 = 96u32; // "header" size including magic?
-        let offset2 = offset1 + self.inner.grid_cell_count * 2;
+        let offset2 = offset1 + self.inner.header.grid_cell_count * 2;
         let offset3 = if self.inner.grid_unk_values.0.is_some() {
-            offset2 + self.inner.grid_cell_count * 12
+            offset2 + self.inner.header.grid_cell_count * 12
         } else {
             0
         };
