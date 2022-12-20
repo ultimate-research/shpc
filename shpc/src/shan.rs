@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 // There aren't very many offsets to calculate.
 /// A Spherical Harmonic ANimation (SHAN) file like chara.shpcanim.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, BinRead, SsbhWrite)]
+#[derive(Debug, BinRead, SsbhWrite, PartialEq, Clone)]
 #[br(magic(b"SHAN"))]
 #[ssbhwrite(magic = b"SHAN")]
 pub struct Shan {
@@ -67,7 +67,7 @@ impl Shan {
 
 #[binread]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 #[br(magic(b"TPCB"))]
 pub struct Tpcb {
     #[br(temp)]
@@ -88,7 +88,7 @@ pub struct Tpcb {
 
 // Create an inner type to only have to hand write the pointer logic.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, BinRead, SsbhWrite)]
+#[derive(Debug, BinRead, SsbhWrite, PartialEq, Clone)]
 #[br(import(base_offset: u64, offset1: u32, offset2: u32, offset3: u32))]
 pub struct TpcbInner {
     pub header: TpcbHeader,
@@ -105,15 +105,24 @@ pub struct TpcbInner {
 
     // TODO: This value isn't always present.
     // TODO: Some sort of location information?
+    // TODO: Is this a fixed position for the probes?
+    // TODO: Test using a small probe count and different colors.
     // Only used for stage and not chara lighting?
     #[br(args(header.grid_cell_count, base_offset - 4, offset3))]
     pub grid_unk_values: Grid<[f32; 3]>,
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, BinRead, SsbhWrite, PartialEq)]
+#[derive(Debug, BinRead, SsbhWrite, PartialEq, Clone)]
 pub struct TpcbHeader {
-    pub unk1_1: u16,
+    pub unk1_1: u16, // TODO: always 1?
+    // TODO: Some sort of flags?
+    // Related to the unk values?
+    // unk1_2, unk values
+    // 0000011, 3 (some)
+    // 0100011, 35 (none)
+    // 1000011, 67 (none)
+    // 1010011, 83 (none)
     pub unk1_2: u16,
     pub grid_cell_count_xyz: [u32; 3], // TODO: This can be (0,0,0)?
     // TODO: Setting spacing values to 0 produces all nan coefficients?
@@ -136,7 +145,7 @@ pub struct TpcbHeader {
 // TODO: Provide methods to access the element at a particular x,y,z coordinate?
 // ex: tpcb.get_value1(1,2,0).unwrap()
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, SsbhWrite)]
+#[derive(Debug, SsbhWrite, Clone, PartialEq)]
 pub struct Grid<T: BinRead<Args = ()> + SsbhWrite>(pub Option<Vec<T>>);
 
 impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
@@ -172,7 +181,7 @@ impl<T: BinRead<Args = ()> + SsbhWrite> BinRead for Grid<T> {
 /// The L1 band has three coefficients for the linear terms.
 /// Each coefficient is compressed into a single byte using a linear mapping.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, BinRead, SsbhWrite)]
+#[derive(Debug, BinRead, SsbhWrite, Clone, PartialEq)]
 pub struct CompressedShCoefficients {
     // TODO: Create types instead of u32.
     // TODO: Expose the coefficient conversion as methods?
@@ -217,7 +226,8 @@ impl SsbhWrite for Tpcb {
     }
 }
 
-#[derive(BinRead, SsbhWrite, Clone)]
+// TODO: Derive proper traits for this like SsbhString.
+#[derive(BinRead, SsbhWrite, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(from = "String", into = "String"))]
 pub struct NameStr {

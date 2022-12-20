@@ -59,7 +59,7 @@ fn main() {
     match input_path.extension().unwrap().to_str().unwrap() {
         "shpcanim" => parse_and_write_json(input_path, &output_path),
         "json" => {
-            let json = std::fs::read_to_string(&input_path).expect("Failed to read file.");
+            let json = std::fs::read_to_string(input_path).expect("Failed to read file.");
             let output_path = args.get(2).map(PathBuf::from);
 
             deserialize_and_save(&json, input_path, &output_path, "shpcanim").unwrap();
