@@ -6,37 +6,36 @@ use glam::{const_vec4, Vec4};
 // vp_c11[19] 0.1481, -0.2962, -0.08551, 0.35544 float4
 // vp_c11[20] 0.1481, -0.2962, -0.08551, 0.35544 float4
 // vp_c11[21] 0.1481, -0.2962, -0.08551, 0.35544 float4
-// TODO: It should be possible for decompress -> compress -> decompress to be 1:1 given the low precision (8-bit).
+// TODO: Should it be possible for decompress -> compress -> decompress to be 1:1 given the low precision (8-bit)?
 const SH_MIN: Vec4 = const_vec4!([0.1481, -0.2962, -0.08551, 0.35544]);
-const SH_MIN_SCALE: Vec4 = const_vec4!([0.32573, 0.32573, 0.32573, 0.28209]);
-const SH_MAX_SCALE: Vec4 = const_vec4!([83.06236, 83.06235, 83.06235, 71.93411]);
+const SH_SCALE: Vec4 = const_vec4!([0.32573469, 0.32573469, 0.32573469, 0.28209451]);
 
 // TODO: Investigate why the coefficients in game can sometimes be nan.
 pub fn decompress_coefficients(unk5: f32, unk6: f32, compressed_coefficients: [u8; 4]) -> [f32; 4] {
     // Reverse the coefficients to match how they appear in the uniform buffer.
     // TODO: Skip the reversing?
     let t = Vec4::new(
-        compressed_coefficients[3] as f32 / 255.0,
-        compressed_coefficients[2] as f32 / 255.0,
-        compressed_coefficients[1] as f32 / 255.0,
-        compressed_coefficients[0] as f32 / 255.0,
+        compressed_coefficients[3] as f32,
+        compressed_coefficients[2] as f32,
+        compressed_coefficients[1] as f32,
+        compressed_coefficients[0] as f32,
     );
 
-    let min_value = SH_MIN + SH_MIN_SCALE * unk5;
-    let scale = SH_MAX_SCALE * unk6;
+    let min_value = SH_MIN + SH_SCALE * unk5;
+    let scale = SH_SCALE * unk6;
     (t * scale + min_value).to_array()
 }
 
 pub fn compress_coefficients(unk5: f32, unk6: f32, coefficients: [f32; 4]) -> [u8; 4] {
     let t = Vec4::from(coefficients);
 
-    let min_value = SH_MIN + SH_MIN_SCALE * unk5;
+    let min_value = SH_MIN + SH_SCALE * unk5;
 
     // When unk6 is zero, the result doesn't depend on the buffer values.
     // We'll just a buffer of all zeros to avoid division by zero.
-    let scale = SH_MAX_SCALE * unk6;
+    let scale = SH_SCALE * unk6;
     let buffer = if unk6 != 0.0 {
-        (t - min_value) / scale * 255.0
+        (t - min_value) / scale
     } else {
         Vec4::ZERO
     };
