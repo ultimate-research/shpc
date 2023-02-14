@@ -27,12 +27,13 @@ pub struct GridCoefficients {
     pub grid_cell_count_xyz: [u32; 3],
     pub grid_range_min_xyz: [f32; 3],
     pub grid_range_max_xyz: [f32; 3],
+    // TODO: These values are tied to the coefficients and shouldn't be editable?
     pub unk5: f32,
     pub unk6: f32,
 
     // TODO: Keep this private so people don't try to index manually?
     // TODO: The length should not exceed the capacity of u16 (used for indices)
-    pub coefficients: Vec<[f32; 3]>,
+    pub coefficients: Vec<[[f32; 4]; 3]>,
 }
 
 impl GridCoefficients {
@@ -91,7 +92,21 @@ impl From<&Tpcb> for GridCoefficients {
             grid_range_max_xyz: t.inner.header.grid_range_max_xyz,
             unk5: t.inner.header.unk5,
             unk6: t.inner.header.unk6,
-            coefficients: Vec::new(),
+            coefficients: t
+                .inner
+                .grid_sh_coefficients
+                .0
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|c| {
+                    [
+                        sh::decompress_coefficients(t.inner.header.unk5, t.inner.header.unk6, c.r),
+                        sh::decompress_coefficients(t.inner.header.unk5, t.inner.header.unk6, c.g),
+                        sh::decompress_coefficients(t.inner.header.unk5, t.inner.header.unk6, c.b),
+                    ]
+                })
+                .collect(),
         }
     }
 }
@@ -285,7 +300,7 @@ mod tests {
             grid_range_max_xyz: [65.51749, 127.32863, 0.0],
             unk5: -1.2438285,
             unk6: 0.020140974,
-            coefficients: vec![[0.0; 3]; 210],
+            coefficients: vec![[[0.0; 4]; 3]; 210],
         };
 
         // Test GridCoefficients -> Tpcb
@@ -334,7 +349,7 @@ mod tests {
             grid_range_max_xyz: [0.0, 0.0, 0.0],
             unk5: -1.0247978,
             unk6: 0.0313374,
-            coefficients: vec![[0.0; 3]; 21],
+            coefficients: vec![[[0.0; 4]; 3]; 21],
         };
 
         // Test GridCoefficients -> Tpcb
